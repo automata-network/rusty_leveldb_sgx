@@ -1,19 +1,19 @@
 #[cfg(feature = "mesalock_sgx")]
 use std::prelude::v1::*;
 
-use block::{Block, BlockIter};
-use blockhandle::BlockHandle;
-use cache;
-use cmp::InternalKeyCmp;
-use env::RandomAccess;
-use error::Result;
-use filter;
-use filter_block::FilterBlockReader;
-use key_types::InternalKey;
-use options::Options;
-use table_block;
-use table_builder::{self, Footer};
-use types::{current_key_val, LdbIterator};
+use crate::block::{Block, BlockIter};
+use crate::blockhandle::BlockHandle;
+use crate::cache;
+use crate::cmp::InternalKeyCmp;
+use crate::env::RandomAccess;
+use crate::error::Result;
+use crate::filter;
+use crate::filter_block::FilterBlockReader;
+use crate::key_types::InternalKey;
+use crate::options::Options;
+use crate::table_block;
+use crate::table_builder::{self, Footer};
+use crate::types::{current_key_val, LdbIterator};
 
 use std::cmp::Ordering;
 use std::rc::Rc;
@@ -44,29 +44,23 @@ impl Table {
     /// Creates a new table reader operating on unformatted keys (i.e., UserKey).
     fn new_raw(opt: Options, file: Rc<Box<dyn RandomAccess>>, size: usize) -> Result<Table> {
         let footer = read_footer(file.as_ref().as_ref(), size)?;
-        let indexblock = table_block::read_table_block(
-            opt.clone(),
-            file.as_ref().as_ref(),
-            &footer.index
-        )?;
-        let metaindexblock = table_block::read_table_block(
-            opt.clone(),
-            file.as_ref().as_ref(),
-            &footer.meta_index
-        )?;
+        let indexblock =
+            table_block::read_table_block(opt.clone(), file.as_ref().as_ref(), &footer.index)?;
+        let metaindexblock =
+            table_block::read_table_block(opt.clone(), file.as_ref().as_ref(), &footer.meta_index)?;
 
         let filter_block_reader =
             Table::read_filter_block(&metaindexblock, file.as_ref().as_ref(), &opt)?;
         let cache_id = opt.block_cache.borrow_mut().new_cache_id();
 
         Ok(Table {
-            file: file,
+            file,
             file_size: size,
-            cache_id: cache_id,
-            opt: opt,
-            footer: footer,
+            cache_id,
+            opt,
+            footer,
             filters: filter_block_reader,
-            indexblock: indexblock,
+            indexblock,
         })
     }
 
@@ -129,11 +123,8 @@ impl Table {
         }
 
         // Two times as_ref(): First time to get a ref from Rc<>, then one from Box<>.
-        let b = table_block::read_table_block(
-            self.opt.clone(),
-            self.file.as_ref().as_ref(),
-            location
-        )?;
+        let b =
+            table_block::read_table_block(self.opt.clone(), self.file.as_ref().as_ref(), location)?;
 
         // insert a cheap copy (Rc).
         self.opt
@@ -362,16 +353,33 @@ impl LdbIterator for TableIterator {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use filter::BloomPolicy;
-    use key_types::LookupKey;
-    use options::{self, CompressionType};
-    use table_builder::TableBuilder;
-    use test_util::{test_iterator_properties, LdbIteratorIter};
-    use types::{current_key_val, LdbIterator};
+#[cfg(feature = "enclave_unit_test")]
+pub mod tests {
+    use crate::filter::BloomPolicy;
+    use crate::key_types::LookupKey;
+    use crate::options::{self, CompressionType};
+    use crate::table_builder::TableBuilder;
+    use crate::test_util::{test_iterator_properties, LdbIteratorIter};
+    use crate::types::{current_key_val, LdbIterator};
 
     use super::*;
+    use teaclave_test_utils::*;
+
+    pub fn run_tests() -> bool {
+        run_tests!(
+            test_table_approximate_offset,
+            test_table_block_cache_use,
+            test_table_iterator_fwd_bwd,
+            test_table_iterator_filter,
+            test_table_iterator_state_behavior,
+            test_table_iterator_behavior_standard,
+            test_table_iterator_values,
+            test_table_iterator_seek,
+            test_table_get,
+            test_table_internal_keys,
+            test_table_reader_checksum,
+        )
+    }
 
     fn build_data() -> Vec<(&'static str, &'static str)> {
         vec![
@@ -449,7 +457,6 @@ mod tests {
         Rc::new(Box::new(src))
     }
 
-    #[test]
     fn test_table_approximate_offset() {
         let (src, size) = build_table(build_data());
         let mut opt = options::for_test();
@@ -468,7 +475,6 @@ mod tests {
         assert_eq!(137, table.approx_offset_of("{aa".as_bytes()));
     }
 
-    #[test]
     fn test_table_block_cache_use() {
         let (src, size) = build_table(build_data());
         let mut opt = options::for_test();
@@ -489,7 +495,6 @@ mod tests {
         assert_eq!(opt.block_cache.borrow().count(), 2);
     }
 
-    #[test]
     fn test_table_iterator_fwd_bwd() {
         let (src, size) = build_table(build_data());
         let data = build_data();
@@ -540,7 +545,6 @@ mod tests {
         assert_eq!(j, 6);
     }
 
-    #[test]
     fn test_table_iterator_filter() {
         let (src, size) = build_table(build_data());
 
@@ -559,7 +563,6 @@ mod tests {
         }
     }
 
-    #[test]
     fn test_table_iterator_state_behavior() {
         let (src, size) = build_table(build_data());
 
@@ -588,7 +591,6 @@ mod tests {
         assert_eq!(first, iter.next());
     }
 
-    #[test]
     fn test_table_iterator_behavior_standard() {
         let mut data = build_data();
         data.truncate(4);
@@ -597,7 +599,6 @@ mod tests {
         test_iterator_properties(table.iter());
     }
 
-    #[test]
     fn test_table_iterator_values() {
         let (src, size) = build_table(build_data());
         let data = build_data();
@@ -633,7 +634,6 @@ mod tests {
         assert_eq!(i, 6);
     }
 
-    #[test]
     fn test_table_iterator_seek() {
         let (src, size) = build_table(build_data());
 
@@ -660,7 +660,6 @@ mod tests {
         assert!(iter.valid());
     }
 
-    #[test]
     fn test_table_get() {
         let (src, size) = build_table(build_data());
 
@@ -692,10 +691,7 @@ mod tests {
     // InternalFilterPolicy.
     // All the other tests use raw keys that don't have any internal structure; this is fine in
     // general, but here we want to see that the other infrastructure works too.
-    #[test]
     fn test_table_internal_keys() {
-        use key_types::LookupKey;
-
         let (src, size) = build_internal_table();
 
         let table = Table::new(options::for_test(), wrap_buffer(src), size).unwrap();
@@ -728,7 +724,6 @@ mod tests {
         }
     }
 
-    #[test]
     fn test_table_reader_checksum() {
         let (mut src, size) = build_table(build_data());
 

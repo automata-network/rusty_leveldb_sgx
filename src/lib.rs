@@ -20,36 +20,23 @@
 //! db.flush().unwrap();
 //! ```
 //!
-#![cfg_attr(all(feature = "mesalock_sgx", not(target_env = "sgx")), no_std)]
-#![cfg_attr(all(target_env = "sgx", target_vendor = "mesalock"), feature(rustc_private))]
-
+#![cfg_attr(feature = "mesalock_sgx", no_std)]
 #![allow(dead_code)]
+#![allow(clippy::all)]
 
-#[cfg(all(feature = "mesalock_sgx", not(target_env = "sgx")))]
+#[cfg(feature = "mesalock_sgx")]
 #[macro_use]
 extern crate sgx_tstd as std;
 
-#[macro_use]
-extern crate cfg_if;
-cfg_if! {
-    if #[cfg(feature = "mesalock_sgx")]  {
-        extern crate sgx_libc as libc;
-        extern crate sgx_trts;
-        extern crate sgx_types;
-        extern crate protected_fs;
-    } else {
-        extern crate libc;
-    }
-}
+extern crate protected_fs;
+extern crate sgx_libc as libc;
+extern crate sgx_trts;
+extern crate sgx_types;
 
 extern crate crc;
 extern crate integer_encoding;
 extern crate rand;
 extern crate snap;
-
-#[cfg(test)]
-#[macro_use]
-extern crate time_test;
 
 mod block;
 mod block_builder;
@@ -86,15 +73,53 @@ mod write_batch;
 mod db_impl;
 mod db_iter;
 
-pub use cmp::{Cmp, DefaultCmp};
+pub use crate::cmp::{Cmp, DefaultCmp};
+pub use crate::db_iter::DBIterator;
+pub use crate::env::Env;
+pub use crate::error::{Result, Status, StatusCode};
+pub use crate::filter::{BloomPolicy, FilterPolicy};
+pub use crate::mem_env::MemEnv;
+pub use crate::options::{in_memory, CompressionType, Options};
+pub use crate::skipmap::SkipMap;
+pub use crate::types::LdbIterator;
+pub use crate::write_batch::WriteBatch;
 pub use db_impl::DB;
-pub use db_iter::DBIterator;
 pub use disk_env::PosixDiskEnv;
-pub use env::Env;
-pub use error::{Result, Status, StatusCode};
-pub use filter::{BloomPolicy, FilterPolicy};
-pub use mem_env::MemEnv;
-pub use options::{in_memory, CompressionType, Options};
-pub use skipmap::SkipMap;
-pub use types::LdbIterator;
-pub use write_batch::WriteBatch;
+
+#[cfg(feature = "enclave_unit_test")]
+pub mod tests {
+    use super::*;
+    use std::prelude::v1::*;
+    use teaclave_test_utils::check_all_passed;
+
+    pub fn run_tests() -> bool {
+        check_all_passed!(
+            block::tests::run_tests(),
+            block_builder::tests::run_tests(),
+            blockhandle::tests::run_tests(),
+            cache::tests::run_tests(),
+            cmp::tests::run_tests(),
+            db_impl::tests::run_tests(),
+            db_iter::tests::run_tests(),
+            disk_env::tests::run_tests(),
+            filter::tests::run_tests(),
+            filter_block::tests::run_tests(),
+            key_types::tests::run_tests(),
+            log::tests::run_tests(),
+            mem_env::tests::run_tests(),
+            memtable::tests::run_tests(),
+            merging_iter::tests::run_tests(),
+            skipmap::tests::run_tests(),
+            snapshot::tests::run_tests(),
+            table_builder::tests::run_tests(),
+            table_cache::tests::run_tests(),
+            test_util::tests::run_tests(),
+            table_reader::tests::run_tests(),
+            types::tests::run_tests(),
+            version::tests::run_tests(),
+            version_edit::tests::run_tests(),
+            version_set::tests::run_tests(),
+            write_batch::tests::run_tests(),
+        )
+    }
+}

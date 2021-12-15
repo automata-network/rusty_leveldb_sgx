@@ -18,6 +18,48 @@ struct LRUList<T> {
     count: usize,
 }
 
+use std::fmt;
+impl<T> fmt::Display for LRUNode<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.next.is_some() {
+            let node = self.next.as_ref().unwrap();
+            writeln!(
+                f,
+                "(self: {:?}, next: {:?}, pre: {:?}, data:{})",
+                self as *const _,
+                (*node).as_ref() as *const _,
+                self.prev,
+                self.data.is_some()
+            )
+        } else {
+            writeln!(
+                f,
+                "(self: {:?}, next: None, pre: {:?}, data:{})",
+                self as *const _,
+                self.prev,
+                self.data.is_some()
+            )
+        }
+    }
+}
+
+impl<T> fmt::Display for LRUList<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let _ = write!(
+            f,
+            "\n {:?}, count: {}, head: {}",
+            self as *const _, self.count, self.head
+        )?;
+        let mut opt_node = &self.head.next;
+        while opt_node.is_some() {
+            let node = opt_node.as_ref().unwrap();
+            let _ = write!(f, "\t {}", node)?;
+            opt_node = &node.next
+        }
+        writeln!(f,)
+    }
+}
+
 /// This is likely unstable; more investigation is needed into correct behavior!
 impl<T> LRUList<T> {
     fn new() -> LRUList<T> {
@@ -93,7 +135,7 @@ impl<T> LRUList<T> {
         unsafe {
             // If has next
             if let Some(ref mut nextp) = (*node_handle).next {
-                swap(&mut (**nextp).prev, &mut (*node_handle).prev);
+                (**nextp).prev = (*node_handle).prev;
             }
             // If has prev
             if let Some(ref mut prevp) = (*node_handle).prev {
@@ -240,16 +282,28 @@ impl<T> Cache<T> {
     }
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature = "enclave_unit_test")]
+pub mod tests {
     use super::LRUList;
     use super::*;
+    use teaclave_test_utils::*;
+
+    pub fn run_tests() -> bool {
+        run_tests!(
+            test_blockcache_cache_add_rm,
+            test_blockcache_cache_capacity,
+            test_blockcache_lru_remove,
+            test_blockcache_lru_1,
+            test_blockcache_lru_reinsert,
+            test_blockcache_lru_reinsert_2,
+            test_blockcache_lru_edge_cases,
+        )
+    }
 
     fn make_key(a: u8, b: u8, c: u8) -> CacheKey {
         [a, b, c, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     }
 
-    #[test]
     fn test_blockcache_cache_add_rm() {
         let mut cache = Cache::new(128);
 
@@ -277,7 +331,6 @@ mod tests {
         assert_eq!(cache.count(), 4);
     }
 
-    #[test]
     fn test_blockcache_cache_capacity() {
         let mut cache = Cache::new(3);
 
@@ -302,7 +355,6 @@ mod tests {
         assert_eq!(cache.get(&h_899), Some(&899));
     }
 
-    #[test]
     fn test_blockcache_lru_remove() {
         let mut lru = LRUList::<usize>::new();
 
@@ -322,7 +374,6 @@ mod tests {
         assert_eq!(lru.count(), 3);
     }
 
-    #[test]
     fn test_blockcache_lru_1() {
         let mut lru = LRUList::<usize>::new();
 
@@ -346,7 +397,6 @@ mod tests {
         assert_eq!(None, lru.remove_last());
     }
 
-    #[test]
     fn test_blockcache_lru_reinsert() {
         let mut lru = LRUList::<usize>::new();
 
@@ -373,7 +423,6 @@ mod tests {
         assert_eq!(lru.remove_last(), Some(22));
     }
 
-    #[test]
     fn test_blockcache_lru_reinsert_2() {
         let mut lru = LRUList::<usize>::new();
 
@@ -395,7 +444,6 @@ mod tests {
         }
     }
 
-    #[test]
     fn test_blockcache_lru_edge_cases() {
         let mut lru = LRUList::<usize>::new();
 

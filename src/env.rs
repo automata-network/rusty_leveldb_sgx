@@ -3,39 +3,21 @@
 #[cfg(feature = "mesalock_sgx")]
 use std::prelude::v1::*;
 
-use error::Result;
+use crate::error::Result;
 
 use std::io::prelude::*;
-use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 
-cfg_if! {
-    if #[cfg(feature = "mesalock_sgx")] {
-        use protected_fs::ProtectedFile;
-        use error::Status;
-        use std::untrusted::fs::File;
-    } else {
-        use std::fs::File;
-    }
-}
+use crate::error::Status;
+use protected_fs::ProtectedFile;
 
 pub trait RandomAccess {
     fn read_at(&self, off: usize, dst: &mut [u8]) -> Result<usize>;
 }
 
-impl RandomAccess for File {
+impl RandomAccess for ProtectedFile {
     fn read_at(&self, off: usize, dst: &mut [u8]) -> Result<usize> {
-        Ok((self as &dyn FileExt).read_at(dst, off as u64)?)
-    }
-}
-
-cfg_if! {
-    if #[cfg(feature = "mesalock_sgx")] {
-        impl RandomAccess for ProtectedFile {
-            fn read_at(&self, off: usize, dst: &mut [u8]) -> Result<usize> {
-                self.read_at(off, dst).map_err(|e| Status::from(e))
-            }
-        }
+        self.read_at(off, dst).map_err(|e| Status::from(e))
     }
 }
 
@@ -44,24 +26,24 @@ pub struct FileLock {
 }
 
 pub trait Env {
-    fn open_sequential_file(&self, &Path) -> Result<Box<dyn Read>>;
-    fn open_random_access_file(&self, &Path) -> Result<Box<dyn RandomAccess>>;
-    fn open_writable_file(&self, &Path) -> Result<Box<dyn Write>>;
-    fn open_appendable_file(&self, &Path) -> Result<Box<dyn Write>>;
+    fn open_sequential_file(&self, p: &Path) -> Result<Box<dyn Read>>;
+    fn open_random_access_file(&self, p: &Path) -> Result<Box<dyn RandomAccess>>;
+    fn open_writable_file(&self, p: &Path) -> Result<Box<dyn Write>>;
+    fn open_appendable_file(&self, p: &Path) -> Result<Box<dyn Write>>;
 
-    fn exists(&self, &Path) -> Result<bool>;
-    fn children(&self, &Path) -> Result<Vec<PathBuf>>;
-    fn size_of(&self, &Path) -> Result<usize>;
+    fn exists(&self, p: &Path) -> Result<bool>;
+    fn children(&self, p: &Path) -> Result<Vec<PathBuf>>;
+    fn size_of(&self, p: &Path) -> Result<usize>;
 
-    fn delete(&self, &Path) -> Result<()>;
-    fn mkdir(&self, &Path) -> Result<()>;
-    fn rmdir(&self, &Path) -> Result<()>;
-    fn rename(&self, &Path, &Path) -> Result<()>;
+    fn delete(&self, p: &Path) -> Result<()>;
+    fn mkdir(&self, p: &Path) -> Result<()>;
+    fn rmdir(&self, p: &Path) -> Result<()>;
+    fn rename(&self, p: &Path, p: &Path) -> Result<()>;
 
-    fn lock(&self, &Path) -> Result<FileLock>;
+    fn lock(&self, p: &Path) -> Result<FileLock>;
     fn unlock(&self, l: FileLock) -> Result<()>;
 
-    fn new_logger(&self, &Path) -> Result<Logger>;
+    fn new_logger(&self, p: &Path) -> Result<Logger>;
 
     fn micros(&self) -> u64;
 }
