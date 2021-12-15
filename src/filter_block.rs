@@ -1,8 +1,8 @@
 #[cfg(feature = "mesalock_sgx")]
 use std::prelude::v1::*;
 
-use block::BlockContents;
-use filter::BoxedFilterPolicy;
+use crate::block::BlockContents;
+use crate::filter::BoxedFilterPolicy;
 
 use std::rc::Rc;
 
@@ -164,14 +164,22 @@ impl FilterBlockReader {
     }
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature = "enclave_unit_test")]
+pub mod tests {
     use super::get_filter_index;
     use super::FILTER_BASE_LOG2;
     use super::*;
-    use filter::BloomPolicy;
+    use crate::filter::BloomPolicy;
+    use teaclave_test_utils::*;
 
-    #[test]
+    pub fn run_tests() -> bool {
+        run_tests!(
+            test_filter_index,
+            test_filter_block_builder,
+            test_filter_block_build_read,
+        )
+    }
+
     fn test_filter_index() {
         assert_eq!(get_filter_index(3777, FILTER_BASE_LOG2), 1);
         assert_eq!(get_filter_index(10000, FILTER_BASE_LOG2), 4);
@@ -206,7 +214,6 @@ mod tests {
         bld.finish()
     }
 
-    #[test]
     fn test_filter_block_builder() {
         let result = produce_filter_block();
         // 2 blocks of 4 filters of 4 bytes plus 1B for `k`; plus three filter offsets (because of
@@ -222,7 +229,6 @@ mod tests {
         );
     }
 
-    #[test]
     fn test_filter_block_build_read() {
         let result = produce_filter_block();
         let reader = FilterBlockReader::new_owned(Rc::new(Box::new(BloomPolicy::new(32))), result);

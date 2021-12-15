@@ -1,16 +1,16 @@
 #[cfg(feature = "mesalock_sgx")]
 use std::prelude::v1::*;
 
-use block::BlockContents;
-use block_builder::BlockBuilder;
-use blockhandle::BlockHandle;
-use cmp::InternalKeyCmp;
-use error::Result;
-use filter::{InternalFilterPolicy, NoFilterPolicy};
-use filter_block::FilterBlockBuilder;
-use key_types::InternalKey;
-use log::mask_crc;
-use options::{CompressionType, Options};
+use crate::block::BlockContents;
+use crate::block_builder::BlockBuilder;
+use crate::blockhandle::BlockHandle;
+use crate::cmp::InternalKeyCmp;
+use crate::error::Result;
+use crate::filter::{InternalFilterPolicy, NoFilterPolicy};
+use crate::filter_block::FilterBlockBuilder;
+use crate::key_types::InternalKey;
+use crate::log::mask_crc;
+use crate::options::{CompressionType, Options};
 
 use std::cmp::Ordering;
 use std::io::Write;
@@ -44,7 +44,7 @@ impl Footer {
     pub fn new(metaix: BlockHandle, index: BlockHandle) -> Footer {
         Footer {
             meta_index: metaix,
-            index: index,
+            index,
         }
     }
 
@@ -120,7 +120,7 @@ impl<Dst: Write> TableBuilder<Dst> {
     pub fn new_raw(opt: Options, dst: Dst) -> TableBuilder<Dst> {
         TableBuilder {
             opt: opt.clone(),
-            dst: dst,
+            dst,
             offset: 0,
             prev_block_last_key: vec![],
             num_entries: 0,
@@ -273,13 +273,18 @@ impl<Dst: Write> TableBuilder<Dst> {
     }
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature = "enclave_unit_test")]
+pub mod tests {
     use super::*;
-    use blockhandle::BlockHandle;
-    use options;
+    use crate::blockhandle::BlockHandle;
+    use crate::options;
+    use teaclave_test_utils::*;
 
-    #[test]
+    pub fn run_tests() -> bool {
+        should_panic!(test_bad_input());
+        run_tests!(test_footer, test_table_builder,)
+    }
+
     fn test_footer() {
         let f = Footer::new(BlockHandle::new(44, 4), BlockHandle::new(55, 5));
         let mut buf = [0; 48];
@@ -292,7 +297,6 @@ mod tests {
         assert_eq!(f2.index.size(), 5);
     }
 
-    #[test]
     fn test_table_builder() {
         let mut d = Vec::with_capacity(512);
         let mut opt = options::for_test();
@@ -328,8 +332,6 @@ mod tests {
         assert_eq!(223, actual);
     }
 
-    #[test]
-    #[should_panic]
     fn test_bad_input() {
         let mut d = Vec::with_capacity(512);
         let mut opt = options::for_test();
