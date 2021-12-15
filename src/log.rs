@@ -5,7 +5,7 @@
 #[cfg(feature = "mesalock_sgx")]
 use std::prelude::v1::*;
 
-use error::{err, Result, StatusCode};
+use crate::error::{err, Result, StatusCode};
 
 use std::io::{Read, Write};
 
@@ -39,7 +39,7 @@ impl<W: Write> LogWriter<W> {
             dst: writer,
             current_block_offset: 0,
             block_size: BLOCK_SIZE,
-            digest: digest,
+            digest,
         }
     }
 
@@ -131,7 +131,7 @@ pub struct LogReader<R: Read> {
 impl<R: Read> LogReader<R> {
     pub fn new(src: R, chksum: bool) -> LogReader<R> {
         LogReader {
-            src: src,
+            src,
             blk_off: 0,
             blocksize: BLOCK_SIZE,
             checksums: chksum,
@@ -152,8 +152,7 @@ impl<R: Read> LogReader<R> {
         loop {
             if self.blocksize - self.blk_off < HEADER_SIZE {
                 // skip to next block
-                self
-                    .src
+                self.src
                     .read(&mut self.head_scratch[0..self.blocksize - self.blk_off])?;
                 self.blk_off = 0;
             }
@@ -216,25 +215,33 @@ pub fn unmask_crc(mc: u32) -> u32 {
     rot.wrapping_shr(17) | rot.wrapping_shl(15)
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature = "enclave_unit_test")]
+pub mod tests {
     use super::*;
     use std::io::Cursor;
+    use teaclave_test_utils::*;
 
-    #[test]
+    pub fn run_tests() -> bool {
+        run_tests!(
+            test_crc_mask_crc,
+            test_crc_sanity,
+            test_writer,
+            test_writer_append,
+            test_reader,
+        )
+    }
+
     fn test_crc_mask_crc() {
         let crc = crc32::checksum_castagnoli("abcde".as_bytes());
         assert_eq!(crc, unmask_crc(mask_crc(crc)));
         assert!(crc != mask_crc(crc));
     }
 
-    #[test]
     fn test_crc_sanity() {
         assert_eq!(0x8a9136aa, crc32::checksum_castagnoli(&[0 as u8; 32]));
         assert_eq!(0x62a8ab43, crc32::checksum_castagnoli(&[0xff as u8; 32]));
     }
 
-    #[test]
     fn test_writer() {
         let data = &[
             "hello world. My first log entry.",
@@ -251,7 +258,6 @@ mod tests {
         assert_eq!(lw.current_block_offset, total_len + 3 * super::HEADER_SIZE);
     }
 
-    #[test]
     fn test_writer_append() {
         let data = &[
             "hello world. My first log entry.",
@@ -284,7 +290,6 @@ mod tests {
         assert_eq!(old, dst);
     }
 
-    #[test]
     fn test_reader() {
         let data = vec![
             "abcdefghi".as_bytes().to_vec(),    // fits one block of 17

@@ -2,7 +2,7 @@
 #[cfg(feature = "mesalock_sgx")]
 use std::prelude::v1::*;
 
-use error::{err, Result, StatusCode};
+use crate::error::{err, Result, StatusCode};
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -185,11 +185,15 @@ pub fn parse_file_name<P: AsRef<Path>>(ff: P) -> Result<(FileNum, FileType)> {
     err(StatusCode::InvalidArgument, "unknown file type")
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature = "enclave_unit_test")]
+pub mod tests {
     use super::*;
+    use teaclave_test_utils::*;
 
-    #[test]
+    pub fn run_tests() -> bool {
+        run_tests!(test_types_parse_file_name,)
+    }
+
     fn test_types_parse_file_name() {
         for c in &[
             ("CURRENT", (0, FileType::Current)),

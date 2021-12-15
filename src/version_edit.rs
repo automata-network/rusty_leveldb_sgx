@@ -1,9 +1,9 @@
 #[cfg(feature = "mesalock_sgx")]
 use std::prelude::v1::*;
 
-use error::{err, Result, StatusCode};
-use key_types::InternalKey;
-use types::{FileMetaData, FileNum, SequenceNumber};
+use crate::error::{err, Result, StatusCode};
+use crate::key_types::InternalKey;
+use crate::types::{FileMetaData, FileNum, SequenceNumber};
 
 use integer_encoding::{VarIntReader, VarIntWriter};
 
@@ -121,7 +121,7 @@ impl VersionEdit {
 
     pub fn set_compact_pointer(&mut self, level: usize, key: InternalKey) {
         self.compaction_ptrs.push(CompactionPointer {
-            level: level,
+            level,
             key: Vec::from(key),
         })
     }
@@ -239,10 +239,8 @@ impl VersionEdit {
                         if let Ok(lvl) = reader.read_varint() {
                             let key = read_length_prefixed(&mut reader)?;
 
-                            ve.compaction_ptrs.push(CompactionPointer {
-                                level: lvl,
-                                key: key,
-                            });
+                            ve.compaction_ptrs
+                                .push(CompactionPointer { level: lvl, key });
                         } else {
                             return err(StatusCode::IOError, "Couldn't read level");
                         }
@@ -269,10 +267,10 @@ impl VersionEdit {
                                     ve.new_files.push((
                                         lvl,
                                         FileMetaData {
-                                            num: num,
-                                            size: size,
-                                            smallest: smallest,
-                                            largest: largest,
+                                            num,
+                                            size,
+                                            smallest,
+                                            largest,
                                             allowed_seeks: 0,
                                         },
                                     ))
@@ -299,15 +297,20 @@ impl VersionEdit {
     }
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature = "enclave_unit_test")]
+pub mod tests {
     use super::CompactionPointer;
     use super::VersionEdit;
+    use super::*;
 
-    use cmp::{Cmp, DefaultCmp};
-    use types::FileMetaData;
+    use crate::cmp::{Cmp, DefaultCmp};
+    use crate::types::FileMetaData;
+    use teaclave_test_utils::*;
 
-    #[test]
+    pub fn run_tests() -> bool {
+        run_tests!(test_version_edit_encode_decode,)
+    }
+
     fn test_version_edit_encode_decode() {
         let mut ve = VersionEdit::new();
 
